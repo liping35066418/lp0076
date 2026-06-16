@@ -55,14 +55,44 @@ const generateCampsites = (): CampsiteData[] => {
   return campsites;
 };
 
+const getDaysInMonth = (year: number, month: number): number => {
+  return new Date(year, month + 1, 0).getDate();
+};
+
 const generateWeeklyVisitors = (period: TimePeriod): DailyVisitorData[] => {
   const weekdays = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
   const data: DailyVisitorData[] = [];
   const today = new Date();
 
+  if (period === 'year') {
+    const currentYear = today.getFullYear();
+    for (let i = 11; i >= 0; i--) {
+      const monthDate = new Date(currentYear, today.getMonth() - i, 1);
+      const year = monthDate.getFullYear();
+      const month = monthDate.getMonth();
+      const daysInMonth = getDaysInMonth(year, month);
+
+      const dailyAvg = generateRandomValue(200, 400);
+      const weekendBoost = generateRandomValue(0, 100);
+      const monthlyTotal = Math.floor((dailyAvg + weekendBoost) * daysInMonth * (0.9 + Math.random() * 0.2));
+
+      const dayOfWeek = monthDate.getDay();
+      const isLowPeriod = monthlyTotal < daysInMonth * 200;
+      const dateStr = `${month + 1}月`;
+
+      data.push({
+        date: dateStr,
+        weekday: weekdays[dayOfWeek === 0 ? 6 : dayOfWeek - 1],
+        visitorCount: monthlyTotal,
+        isLowPeriod,
+      });
+    }
+    return data;
+  }
+
   let count = 7;
+  if (period === 'today') count = 1;
   if (period === 'month') count = 30;
-  if (period === 'year') count = 12;
 
   for (let i = count - 1; i >= 0; i--) {
     const date = new Date(today);
@@ -75,9 +105,7 @@ const generateWeeklyVisitors = (period: TimePeriod): DailyVisitorData[] => {
     }
 
     const isLowPeriod = baseCount < 200;
-    const dateStr = period === 'year'
-      ? `${date.getMonth() + 1}月`
-      : `${date.getMonth() + 1}/${date.getDate()}`;
+    const dateStr = `${date.getMonth() + 1}/${date.getDate()}`;
 
     data.push({
       date: dateStr,
