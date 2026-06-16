@@ -4,7 +4,7 @@ import { useDashboardStore } from '@/store/dashboardStore';
 import { PieChart } from 'lucide-react';
 
 export default function ConsumptionPieChart() {
-  const { dashboardData } = useDashboardStore();
+  const { dashboardData, selectedCampsite } = useDashboardStore();
 
   if (!dashboardData) {
     return (
@@ -12,10 +12,19 @@ export default function ConsumptionPieChart() {
     );
   }
 
-  const { consumption } = dashboardData;
-  const total = consumption.reduce((s, c) => s + c.value, 0);
+  const { consumption, campsiteConsumption, campsites } = dashboardData;
 
-  const pieData = consumption.map((c) => ({
+  const activeConsumption = selectedCampsite && campsiteConsumption[selectedCampsite]
+    ? campsiteConsumption[selectedCampsite]
+    : consumption;
+
+  const selectedCampsiteName = selectedCampsite
+    ? campsites.find((c) => c.id === selectedCampsite)?.name
+    : null;
+
+  const total = activeConsumption.reduce((s, c) => s + c.value, 0);
+
+  const pieData = activeConsumption.map((c) => ({
     name: c.name,
     value: c.value,
     itemStyle: { color: c.color },
@@ -30,10 +39,11 @@ export default function ConsumptionPieChart() {
       borderWidth: 1,
       textStyle: { color: '#fff', fontSize: 12 },
       formatter: (params: TooltipComponentFormatterCallbackParams) => {
-        const percent = ((params.value as number / total) * 100).toFixed(1);
+        const p = params as unknown as { value: number; color: string; name: string };
+        const percent = ((p.value / total) * 100).toFixed(1);
         return `
-          <div class="font-bold mb-1" style="color:${params.color as string}">${params.name as string}</div>
-          <div>金额: <span class="text-white">¥${(params.value as number).toLocaleString()}</span></div>
+          <div class="font-bold mb-1" style="color:${p.color}">${p.name}</div>
+          <div>金额: <span class="text-white">¥${p.value.toLocaleString()}</span></div>
           <div>占比: <span class="text-cyan-400">${percent}%</span></div>
         `;
       },
@@ -50,7 +60,7 @@ export default function ConsumptionPieChart() {
         fontSize: 11,
       },
       formatter: (name: string) => {
-        const item = consumption.find((c) => c.name === name);
+        const item = activeConsumption.find((c) => c.name === name);
         return `${name}  ${item?.percentage}%`;
       },
     },
@@ -77,8 +87,9 @@ export default function ConsumptionPieChart() {
             fontWeight: 'bold',
             color: '#fff',
             formatter: (params: TooltipComponentFormatterCallbackParams) => {
-              const percent = ((params.value as number / total) * 100).toFixed(1);
-              return `{name|${params.name as string}}\n{value|¥${(params.value as number).toLocaleString()}}\n{percent|${percent}%}`;
+              const p = params as unknown as { value: number; name: string };
+              const percent = ((p.value / total) * 100).toFixed(1);
+              return `{name|${p.name}}\n{value|¥${p.value.toLocaleString()}}\n{percent|${percent}%}`;
             },
             rich: {
               name: {
@@ -112,7 +123,7 @@ export default function ConsumptionPieChart() {
     ],
   };
 
-  const sortedConsumption = [...consumption].sort((a, b) => b.value - a.value);
+  const sortedConsumption = [...activeConsumption].sort((a, b) => b.value - a.value);
   const topCategory = sortedConsumption[0];
 
   return (
@@ -121,6 +132,11 @@ export default function ConsumptionPieChart() {
         <div className="flex items-center gap-2">
           <PieChart className="w-4 h-4 text-cyan-400" />
           <h3 className="font-semibold text-white">消费构成分析</h3>
+          {selectedCampsiteName && (
+            <span className="ml-2 px-2 py-0.5 text-xs rounded-full bg-cyan-500/20 text-cyan-400 border border-cyan-500/30">
+              {selectedCampsiteName}
+            </span>
+          )}
         </div>
       </div>
       <div className="flex-1 p-2">
@@ -132,7 +148,7 @@ export default function ConsumptionPieChart() {
       </div>
       <div className="px-5 py-3 border-t border-slate-700/30">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-xs text-slate-500">总消费金额</span>
+          <span className="text-xs text-slate-500">{selectedCampsite ? '营位消费金额' : '总消费金额'}</span>
           <span className="text-xl font-bold text-emerald-400">¥{total.toLocaleString()}</span>
         </div>
         <div className="flex items-center justify-between">

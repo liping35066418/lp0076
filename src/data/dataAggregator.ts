@@ -27,17 +27,26 @@ const generateRandomValue = (min: number, max: number): number => {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 };
 
-const generateCampsites = (): CampsiteData[] => {
+const OCCUPANCY_RANGE: Record<TimePeriod, { min: number; max: number }> = {
+  today: { min: 0.2, max: 0.6 },
+  week: { min: 0.35, max: 0.75 },
+  month: { min: 0.45, max: 0.85 },
+  year: { min: 0.55, max: 0.95 },
+};
+
+const generateCampsites = (period: TimePeriod): CampsiteData[] => {
   const campsites: CampsiteData[] = [];
   const rows = 5;
   const cols = 3;
   let idx = 0;
+  const range = OCCUPANCY_RANGE[period];
 
   for (let row = 0; row < rows; row++) {
     for (let col = 0; col < cols; col++) {
       if (idx >= CAMPSITE_NAMES.length) break;
       const capacity = generateRandomValue(20, 50);
-      const currentOccupancy = generateRandomValue(Math.floor(capacity * 0.3), capacity);
+      const occupancyRate = range.min + Math.random() * (range.max - range.min);
+      const currentOccupancy = Math.min(capacity, Math.floor(capacity * occupancyRate));
       const heat = Math.floor((currentOccupancy / capacity) * 100);
 
       campsites.push({
@@ -135,9 +144,15 @@ const generateHourlyData = (): HourlyData[] => {
   return data;
 };
 
-const generateConsumption = (period: TimePeriod): ConsumptionCategory[] => {
+const generateConsumptionForCampsite = (
+  period: TimePeriod,
+  occupancy: number,
+  capacity: number
+): ConsumptionCategory[] => {
   const multiplier = period === 'today' ? 1 : period === 'week' ? 7 : period === 'month' ? 30 : 365;
-  const totalBase = generateRandomValue(8000, 15000) * multiplier;
+  const occupancyRatio = capacity > 0 ? occupancy / capacity : 0.5;
+  const basePerPerson = generateRandomValue(80, 200);
+  const totalBase = Math.floor(occupancy * basePerPerson * multiplier * (0.8 + Math.random() * 0.4));
 
   let remaining = totalBase;
   const categories: ConsumptionCategory[] = CONSUMPTION_CATEGORIES.map((cat, idx) => {
@@ -146,7 +161,7 @@ const generateConsumption = (period: TimePeriod): ConsumptionCategory[] => {
       value = remaining;
     } else {
       const ratio = [0.35, 0.25, 0.18, 0.12, 0.07][idx];
-      value = Math.floor(totalBase * ratio * (0.9 + Math.random() * 0.2));
+      value = Math.floor(totalBase * ratio * (0.85 + Math.random() * 0.3));
       remaining -= value;
     }
     return {
@@ -156,6 +171,46 @@ const generateConsumption = (period: TimePeriod): ConsumptionCategory[] => {
     };
   });
   return categories;
+};
+
+const generateCampsiteConsumption = (
+  period: TimePeriod,
+  campsites: CampsiteData[]
+): Record<string, ConsumptionCategory[]> => {
+  const result: Record<string, ConsumptionCategory[]> = {};
+  for (const campsite of campsites) {
+    result[campsite.id] = generateConsumptionForCampsite(
+      period,
+      campsite.currentOccupancy,
+      campsite.capacity
+    );
+  }
+  return result;
+};
+
+const aggregateConsumptionFromCampsites = (
+  campsiteConsumption: Record<string, ConsumptionCategory[]>
+): ConsumptionCategory[] => {
+  const allIds = Object.keys(campsiteConsumption);
+  if (allIds.length === 0) return [];
+
+  return CONSUMPTION_CATEGORIES.map((cat, catIdx) => {
+    let totalValue = 0;
+    for (const id of allIds) {
+      totalValue += campsiteConsumption[id][catIdx].value;
+    }
+    return {
+      ...cat,
+      value: totalValue,
+      percentage: 0,
+    };
+  }).map((cat, _, arr) => {
+    const total = arr.reduce((s, c) => s + c.value, 0);
+    return {
+      ...cat,
+      percentage: total > 0 ? Math.round((cat.value / total) * 1000) / 10 : 0,
+    };
+  });
 };
 
 const calculateKPI = (
@@ -199,9 +254,10 @@ const findLowPeriods = (visitors: DailyVisitorData[], hourlyData: HourlyData[]):
 };
 
 export const aggregateDashboardData = (period: TimePeriod): DashboardData => {
-  const campsites = generateCampsites();
+  const campsites = generateCampsites(period);
   const weeklyVisitors = generateWeeklyVisitors(period);
-  const consumption = generateConsumption(period);
+  const campsiteConsumption = generateCampsiteConsumption(period, campsites);
+  const consumption = aggregateConsumptionFromCampsites(campsiteConsumption);
   const hourlyData = generateHourlyData();
   const kpi = calculateKPI(weeklyVisitors, consumption, campsites);
   const lowPeriods = findLowPeriods(weeklyVisitors, hourlyData);
@@ -211,6 +267,7 @@ export const aggregateDashboardData = (period: TimePeriod): DashboardData => {
     campsites,
     weeklyVisitors,
     consumption,
+    campsiteConsumption,
     timePeriod: period,
     lowPeriods,
   };
@@ -221,7 +278,9 @@ export const getHourlyVisitorData = (): HourlyData[] => {
 };
 
 export const calculateTotalMetrics = (data: DashboardData) => {
-  const popularCampsite = [...data.campsites].sort((a, b) => b.heat - a.heat)[0];
+  const popularCampsite = [...data.campsites].sort(
+    (a, b) => (b.currentOccupancy / b.capacity) - (a.currentOccupancy / a.capacity)
+  )[0];
   const peakDay = [...data.weeklyVisitors].sort((a, b) => b.visitorCount - a.visitorCount)[0];
   const topConsumption = [...data.consumption].sort((a, b) => b.value - a.value)[0];
 

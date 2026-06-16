@@ -40,6 +40,7 @@ export interface DashboardData {
   campsites: CampsiteData[];
   weeklyVisitors: DailyVisitorData[];
   consumption: ConsumptionCategory[];
+  campsiteConsumption: Record<string, ConsumptionCategory[]>;
   timePeriod: TimePeriod;
   lowPeriods: string[];
 }

@@ -7,8 +7,10 @@ interface DashboardState {
   dashboardData: DashboardData | null;
   hourlyData: HourlyData[];
   loading: boolean;
+  selectedCampsite: string | null;
   setTimePeriod: (period: TimePeriod) => void;
   refreshData: () => void;
+  setSelectedCampsite: (id: string | null) => void;
   isLowPeriod: (timeLabel: string) => boolean;
 }
 
@@ -17,9 +19,10 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
   dashboardData: null,
   hourlyData: [],
   loading: false,
+  selectedCampsite: null,
 
   setTimePeriod: (period: TimePeriod) => {
-    set({ timePeriod: period, loading: true });
+    set({ timePeriod: period, loading: true, selectedCampsite: null });
     const data = aggregateDashboardData(period);
     const hourly = getHourlyVisitorData();
     set({ dashboardData: data, hourlyData: hourly, loading: false });
@@ -31,6 +34,10 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
     const data = aggregateDashboardData(timePeriod);
     const hourly = getHourlyVisitorData();
     set({ dashboardData: data, hourlyData: hourly, loading: false });
+  },
+
+  setSelectedCampsite: (id: string | null) => {
+    set({ selectedCampsite: id });
   },
 
   isLowPeriod: (timeLabel: string) => {
